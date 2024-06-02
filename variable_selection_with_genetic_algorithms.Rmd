@@ -1,0 +1,85 @@
+---
+title: "Variable Selection with Genetic Algorithms"
+author: "Deniz Barın"
+date: "5/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(magrittr)
+library(readxl)
+library(leaps)
+library(GA)
+# d <- read_xlsx("AirQualityUCI.xlsx") %>% 
+#   select(-1,-2)
+d <- swiss %>% 
+  model.matrix(Fertility~.^2-1,.) %>% 
+  cbind(Fertility=swiss$Fertility) %>% 
+  data.frame() %>% 
+  select(Fertility,everything())
+
+
+```
+
+
+```{r}
+models <- regsubsets(Fertility~., data = d, nvmax = 16)
+res.sum <- summary(models)
+
+converter <- function(x){
+  bin <- as.integer(unlist(str_split(x,"")))
+  cor.columns <- bin==1
+  d2 <- d[,c(TRUE,cor.columns)]
+  if(sum(cor.columns)>0){
+   -1*(lm(Fertility~.,d2) %>% BIC())
+  } else {
+    -1*(lm(d2~1) %>% BIC())
+  }
+}
+
+ga.res <- ga(fitness=converter,
+           type="binary",
+           nBits=ncol(d)-1,
+           names=names(d)[2:ncol(d)])
+a <- summary(ga.res)
+which.min(res.sum$bic)
+lm(Fertility~., d[,c(TRUE,a$solution==1)]) %>% BIC()
+lm(Fertility~.,d) %>% step(trace=0,k=log(nrow(d))) %>% BIC()
+```
+
+```{r}
+d <- ISLR::Default %>% 
+  model.matrix(default~.^2-1,.) %>% 
+  cbind(default=ISLR::Default$default) %>% 
+  data.frame() %>% 
+  select(default,everything())
+```
+
+
+```{r}
+models <- regsubsets(default~., data = d, nvmax = 16)
+res.sum <- summary(models)
+
+converter <- function(x){
+  bin <- as.integer(unlist(str_split(x,"")))
+  cor.columns <- bin==1
+  d2 <- d[,c(TRUE,cor.columns)]
+  if(sum(cor.columns)>0){
+   -1*(glm(factor(default)~.,family=binomial,d2) %>% BIC())
+  } else {
+    -1*(glm(factor(d2)~1,family=binomial) %>% BIC())
+  }
+}
+
+ga.res <- ga(fitness=converter,
+           type="binary",
+           nBits=ncol(d)-1,
+           names=names(d)[2:ncol(d)])
+a <- summary(ga.res)
+which.min(res.sum$bic)
+glm(factor(default)~.,family=binomial,d[,c(TRUE,a$solution==1)]) %>% BIC()
+a$solution
+glm(factor(default)~.,family=binomial,d) %>% step(trace=0,k=log(nrow(d))) %>% summary()
+```
